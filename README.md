@@ -121,44 +121,23 @@ The backend provides secure authentication, Google OAuth, hotel management, book
 
 ## 📂 Project Structure
 
+## 📂 Project Structure
+
 ```text
 server/
 │
-├── config/
-│   ├── db.js
-│   ├── cloudinary.js
-│   └── google.js
+├── config/          # Database and service configuration
+├── controllers/     # Request handling and business logic
+├── jobs/            # Background/scheduled jobs
+├── middleware/      # Authentication and request middleware
+├── models/          # Database models
+├── routes/          # API routes
 │
-├── controllers/
-│   ├── auth.controller.js
-│   ├── booking.controller.js
-│   └── hotel.controller.js
-│
-├── middleware/
-│   ├── auth.middleware.js
-│   ├── auth.validation.js
-│   ├── validation.middleware.js
-│   └── ...
-│
-├── models/
-│   ├── auth.model.js
-│   ├── booking.model.js
-│   ├── hotel.model.js
-│   └── ...
-│
-├── routes/
-│   ├── auth.routes.js
-│   ├── booking.routes.js
-│   ├── hotel.routes.js
-│   └── ...
-│
-├── utils/
-│   └── ...
-│
-├── .env
+├── .env             # Environment variables
+├── .gitignore
 ├── package.json
-└── server.js
-🗄️ Database
+├── package-lock.json
+└── server.js        # Main server entry point🗄️ Database
 
 The backend uses MySQL for persistent data storage.
 
