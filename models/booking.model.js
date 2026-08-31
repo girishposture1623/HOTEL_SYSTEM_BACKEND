@@ -213,7 +213,15 @@ const getBookingById = async (id) => {
 
         h.name AS hotel_name,
         h.location AS hotel_location,
-        h.price_per_night
+        h.price_per_night,
+
+        (
+          SELECT hi.image_url
+          FROM hotel_images hi
+          WHERE hi.hotel_id = h.id
+          ORDER BY hi.id ASC
+          LIMIT 1
+        ) AS hotel_image
 
       FROM bookings b
 
@@ -242,7 +250,6 @@ const getBookingById = async (id) => {
 
 const getUserBookings = async (userId) => {
   try {
-
     const [rows] = await db.execute(
       `
       SELECT
@@ -265,7 +272,15 @@ const getUserBookings = async (userId) => {
         h.id AS hotel_id,
         h.name AS hotel_name,
         h.location AS hotel_location,
-        h.price_per_night
+        h.price_per_night,
+
+        (
+          SELECT hi.image_url
+          FROM hotel_images hi
+          WHERE hi.hotel_id = h.id
+          ORDER BY hi.id ASC
+          LIMIT 1
+        ) AS hotel_image
 
       FROM bookings b
 
@@ -282,7 +297,6 @@ const getUserBookings = async (userId) => {
     return rows;
 
   } catch (error) {
-
     console.log(
       "Get user bookings model error:",
       error
