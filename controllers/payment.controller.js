@@ -2,8 +2,13 @@ import razorpay from "../config/razorpay.js";
 import crypto from "crypto";
 
 import {
+  confirmPaidBooking,
+  getBookingByRazorpayOrderId,
   getBookingForPayment,
+  getBookingForVerification,
+  markBookingRefunded,
   markPaymentFailed,
+  savePaymentDetails,
   saveRazorpayOrderId,
 } from "../models/payment.model.js";
 import { checkRoomAvailability } from "../models/booking.model.js";
@@ -133,6 +138,13 @@ const verifyPayment = async (req, res) => {
       razorpay_signature,
     } = req.body;
 
+    console.log("VERIFY PAYMENT DATA:", {
+      bookingId,
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+    });
+
     if (
       !bookingId ||
       !razorpay_payment_id ||
@@ -145,8 +157,11 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // Get booking
-    const booking = await getBookingForVerification(bookingId, userId);
+    const booking =
+      await getBookingForVerification(
+        bookingId,
+        userId
+      );
 
     if (!booking) {
       return res.status(404).json({
@@ -155,7 +170,16 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // Booking should still be pending
+    console.log(
+      "DB ORDER ID:",
+      booking.razorpay_order_id
+    );
+
+    console.log(
+      "SECRET EXISTS:",
+      !!process.env.RAZORPAY_KEY_SECRET
+    );
+
     if (
       booking.booking_status !== "pending" ||
       booking.payment_status !== "pending"
@@ -166,101 +190,168 @@ const verifyPayment = async (req, res) => {
       });
     }
 
-    // Check booking expiry
-    if (booking.expires_at && new Date(booking.expires_at) <= new Date()) {
+    if (
+      booking.expires_at &&
+      new Date(booking.expires_at) <= new Date()
+    ) {
       return res.status(410).json({
         success: false,
         message: "Booking hold has expired",
       });
     }
 
-    if (booking.razorpay_order_id !== razorpay_order_id) {
+    if (
+      booking.razorpay_order_id !==
+      razorpay_order_id
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid payment order",
       });
     }
 
-    const generatedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${booking.razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
+    const generatedSignature =
+      crypto
+        .createHmac(
+          "sha256",
+          process.env.RAZORPAY_KEY_SECRET
+        )
+        .update(
+          `${booking.razorpay_order_id}|${razorpay_payment_id}`
+        )
+        .digest("hex");
 
-    if (generatedSignature !== razorpay_signature) {
+    console.log(
+      "GENERATED SIGNATURE:",
+      generatedSignature
+    );
+
+    console.log(
+      "RAZORPAY SIGNATURE:",
+      razorpay_signature
+    );
+
+    if (
+      generatedSignature !==
+      razorpay_signature
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid payment signature",
       });
     }
 
-    // Save payment details
     await savePaymentDetails({
       bookingId,
-      paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
-      signature: razorpay_signature,
+      paymentId:
+        razorpay_payment_id,
+      orderId:
+        razorpay_order_id,
+      signature:
+        razorpay_signature,
     });
 
-    const availability = await checkRoomAvailability({
-      hotelId: booking.hotel_id,
-      checkIn: booking.check_in,
-      checkOut: booking.check_out,
-      rooms: booking.rooms_booked,
-      excludeBookingId: booking.id,
-    });
+    const availability =
+      await checkRoomAvailability({
+        hotelId: booking.hotel_id,
+        checkIn: booking.check_in,
+        checkOut: booking.check_out,
+        rooms: booking.rooms_booked,
+        excludeBookingId: booking.id,
+      });
 
     if (!availability.isAvailable) {
-      try {
-        const refund = await razorpay.payments.refund(razorpay_payment_id, {
-          amount: Math.round(Number(booking.total_price) * 100),
-          speed: "normal",
-          notes: {
-            booking_id: String(bookingId),
-            reason: "Rooms unavailable after payment",
-          },
-        });
 
-        await markBookingRefunded(bookingId);
+      try {
+
+        const refund =
+          await razorpay.payments.refund(
+            razorpay_payment_id,
+            {
+              amount:
+                Math.round(
+                  Number(
+                    booking.total_price
+                  ) * 100
+                ),
+
+              speed: "normal",
+
+              notes: {
+                booking_id:
+                  String(bookingId),
+
+                reason:
+                  "Rooms unavailable after payment",
+              },
+            }
+          );
+
+        await markBookingRefunded(
+          bookingId
+        );
 
         return res.status(409).json({
           success: false,
           refunded: true,
+
           message:
             "Rooms are no longer available. Your payment has been refunded.",
-          refundId: refund.id,
+
+          refundId:
+            refund.id,
         });
+
       } catch (refundError) {
-        console.log("Refund error:", refundError);
+
+        console.log(
+          "Refund error:",
+          refundError
+        );
 
         return res.status(500).json({
           success: false,
           refunded: false,
+
           message:
             "Rooms unavailable and refund could not be completed automatically. Please contact support.",
         });
       }
     }
 
-    const confirmed = await confirmPaidBooking(bookingId);
+    const confirmed =
+      await confirmPaidBooking(
+        bookingId
+      );
 
     if (!confirmed) {
       return res.status(409).json({
         success: false,
-        message: "Unable to confirm booking",
+        message:
+          "Unable to confirm booking",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Payment successful and booking confirmed",
+
+      message:
+        "Payment successful and booking confirmed",
+
       bookingId,
     });
+
   } catch (error) {
-    console.log("Verify payment controller error:", error);
+
+    console.log(
+      "Verify payment controller error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Payment verification failed",
+      message:
+        "Payment verification failed",
     });
   }
 };

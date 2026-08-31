@@ -2,6 +2,7 @@ import express from "express";
 
 import protect from "../middleware/auth.middleware.js";
 import adminOnly from "../middleware/admin.middleware.js";
+import upload from "../middleware/upload.middleware.js";
 
 import {
   getAllHotels,
@@ -9,6 +10,7 @@ import {
   postHotel,
   putHotel,
   removeHotel,
+  removeHotelImage,
 } from "../controllers/hotel.controller.js";
 
 import {
@@ -32,98 +34,56 @@ import validate from "../middleware/validation.middleware.js";
 
 const adminRoute = express.Router();
 
-
 adminRoute.use(protect);
 adminRoute.use(adminOnly);
 
 
-adminRoute.get(
-  "/hotels",
-  getAllHotels
-);
+adminRoute.get("/hotels", getAllHotels);
 
-adminRoute.get(
-  "/hotels/:id",
-  getHotelid
-);
+adminRoute.get("/hotels/:id", getHotelid);
 
 adminRoute.post(
   "/hotels",
+  upload.array("images", 10),
   createHotelValidation,
   validate,
-  postHotel
+  postHotel,
 );
 
 adminRoute.patch(
   "/hotels/:id",
+  upload.array("images", 10),
   createHotelValidation,
   validate,
-  putHotel
+  putHotel,
 );
-
 adminRoute.delete(
-  "/hotels/:id",
-  removeHotel
+  "/hotels/:id/images/:imageId",
+  removeHotelImage
 );
 
+adminRoute.delete("/hotels/:id", removeHotel);
 
-adminRoute.get(
-  "/bookings",
-  getBookings
-);
+adminRoute.get("/bookings", getBookings);
 
-adminRoute.patch(
-  "/bookings/:id/status",
-  changeBookingStatus
-);
+adminRoute.patch("/bookings/:id/status", changeBookingStatus);
 
+adminRoute.get("/dashboard", dashboardStats);
 
+adminRoute.get("/recent-bookings", recentBookings);
 
-adminRoute.get(
-  "/dashboard",
-  dashboardStats
-);
+adminRoute.get("/booking-overview", bookingOverview);
 
-adminRoute.get(
-  "/recent-bookings",
-  recentBookings
-);
+adminRoute.get("/revenue-overview", revenueOverview);
 
-adminRoute.get(
-  "/booking-overview",
-  bookingOverview
-);
+adminRoute.get("/hotel-availability", hotelAvailability);
 
-adminRoute.get(
-  "/revenue-overview",
-  revenueOverview
-);
+adminRoute.get("/users", allUsers);
 
-adminRoute.get(
-  "/hotel-availability",
-  hotelAvailability
-);
+adminRoute.get("/users/:id", singleUser);
 
+adminRoute.put("/users/:id", updateUser);
 
-adminRoute.get(
-  "/users",
-  allUsers
-);
-
-adminRoute.get(
-  "/users/:id",
-  singleUser
-);
-
-adminRoute.put(
-  "/users/:id",
-  updateUser
-);
-
-adminRoute.delete(
-  "/users/:id",
-  deleteUser
-);
-
+adminRoute.delete("/users/:id", deleteUser);
 
 export default adminRoute;

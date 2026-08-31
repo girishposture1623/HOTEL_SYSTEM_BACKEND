@@ -1,6 +1,8 @@
 import db from "../config/db.js";
 
-
+// =====================================================
+// GET HOTELS
+// =====================================================
 
 const getHotels = async ({
   search = "",
@@ -9,22 +11,18 @@ const getHotels = async ({
   maxPrice,
   minRating,
   sort = "newest",
-  page = 1,
-  limit = 10,
 } = {}) => {
   try {
-    page = Math.max(Number(page) || 1, 1);
-    limit = Math.min(
-      Math.max(Number(limit) || 10, 1),
-      100
-    );
-
-    const offset = (page - 1) * limit;
+    // =====================================================
+    // CONDITIONS
+    // =====================================================
 
     const conditions = [];
     const values = [];
 
-    // ================= SEARCH =================
+    // =====================================================
+    // SEARCH
+    // =====================================================
 
     if (search && search.trim()) {
       conditions.push(`
@@ -44,11 +42,13 @@ const getHotels = async ({
       );
     }
 
-    // ================= LOCATION =================
+    // =====================================================
+    // LOCATION
+    // =====================================================
 
     if (location && location.trim()) {
       conditions.push(
-        "LOWER(location) LIKE LOWER(?)"
+        `LOWER(location) LIKE LOWER(?)`
       );
 
       values.push(
@@ -56,7 +56,9 @@ const getHotels = async ({
       );
     }
 
-    // ================= MIN PRICE =================
+    // =====================================================
+    // MIN PRICE
+    // =====================================================
 
     if (
       minPrice !== undefined &&
@@ -69,14 +71,16 @@ const getHotels = async ({
         price >= 0
       ) {
         conditions.push(
-          "price_per_night >= ?"
+          `price_per_night >= ?`
         );
 
         values.push(price);
       }
     }
 
-    // ================= MAX PRICE =================
+    // =====================================================
+    // MAX PRICE
+    // =====================================================
 
     if (
       maxPrice !== undefined &&
@@ -89,14 +93,16 @@ const getHotels = async ({
         price >= 0
       ) {
         conditions.push(
-          "price_per_night <= ?"
+          `price_per_night <= ?`
         );
 
         values.push(price);
       }
     }
 
-    // ================= RATING =================
+    // =====================================================
+    // MIN RATING
+    // =====================================================
 
     if (
       minRating !== undefined &&
@@ -110,21 +116,25 @@ const getHotels = async ({
         rating <= 5
       ) {
         conditions.push(
-          "rating >= ?"
+          `rating >= ?`
         );
 
         values.push(rating);
       }
     }
 
-    // ================= WHERE =================
+    // =====================================================
+    // WHERE
+    // =====================================================
 
     const whereClause =
       conditions.length > 0
         ? `WHERE ${conditions.join(" AND ")}`
         : "";
 
-    // ================= SORT =================
+    // =====================================================
+    // SORT
+    // =====================================================
 
     const sortMap = {
       newest: "created_at DESC",
@@ -141,24 +151,9 @@ const getHotels = async ({
       sortMap[sort] ||
       sortMap.newest;
 
-    // ================= DEBUG =================
-
-    console.log(
-      "SEARCH VALUE:",
-      search
-    );
-
-    console.log(
-      "CONDITIONS:",
-      conditions
-    );
-
-    console.log(
-      "VALUES:",
-      values
-    );
-
-    // ================= COUNT =================
+    // =====================================================
+    // COUNT
+    // =====================================================
 
     const [countRows] =
       await db.execute(
@@ -171,9 +166,11 @@ const getHotels = async ({
       );
 
     const total =
-      Number(countRows[0].total) || 0;
+      Number(countRows[0]?.total) || 0;
 
-    // ================= GET HOTELS =================
+    // =====================================================
+    // GET ALL MATCHING HOTELS
+    // =====================================================
 
     const [hotels] =
       await db.execute(
@@ -182,6 +179,8 @@ const getHotels = async ({
           id,
           name,
           location,
+          phone_number,
+          call_status,
           description,
           rating,
           price_per_night,
@@ -190,25 +189,19 @@ const getHotels = async ({
         FROM hotels
         ${whereClause}
         ORDER BY ${orderBy}
-        LIMIT ? OFFSET ?
         `,
-        [
-          ...values,
-          limit,
-          offset,
-        ]
+        values
       );
 
-    // ================= DEBUG =================
-
-    console.log(
-      "DB HOTELS:",
-      hotels
-    );
-
-    // ================= IMAGES + AMENITIES =================
+    // =====================================================
+    // GET IMAGES + AMENITIES
+    // =====================================================
 
     for (const hotel of hotels) {
+
+      // ---------------------------------------------------
+      // IMAGES
+      // ---------------------------------------------------
 
       const [images] =
         await db.execute(
@@ -219,19 +212,31 @@ const getHotels = async ({
             public_id
           FROM hotel_images
           WHERE hotel_id = ?
+          ORDER BY id ASC
           `,
           [hotel.id]
         );
 
+      // ---------------------------------------------------
+      // AMENITIES
+      // ---------------------------------------------------
+
       const [amenities] =
         await db.execute(
           `
-          SELECT amenity
+          SELECT
+            id,
+            amenity
           FROM hotel_amenities
           WHERE hotel_id = ?
+          ORDER BY id ASC
           `,
           [hotel.id]
         );
+
+      // ---------------------------------------------------
+      // FORMAT IMAGES
+      // ---------------------------------------------------
 
       hotel.images =
         images.map((image) => ({
@@ -240,21 +245,23 @@ const getHotels = async ({
           public_id: image.public_id,
         }));
 
+      // ---------------------------------------------------
+      // FORMAT AMENITIES
+      // ---------------------------------------------------
+
       hotel.amenities =
         amenities.map(
           (item) => item.amenity
         );
     }
 
-    // ================= RETURN =================
+    // =====================================================
+    // RETURN
+    // =====================================================
 
     return {
       hotels,
       total,
-      page,
-      limit,
-      totalPages:
-        Math.ceil(total / limit),
     };
 
   } catch (error) {
@@ -269,26 +276,33 @@ const getHotels = async ({
 };
 
 
+// =====================================================
+// GET HOTEL BY ID
+// =====================================================
+
 const getHotelById = async (id) => {
   try {
 
-    const [rows] = await db.execute(
-      `
-      SELECT
-        id,
-        name,
-        location,
-        description,
-        rating,
-        price_per_night,
-        total_rooms,
-        created_at
-      FROM hotels
-      WHERE id = ?
-      LIMIT 1
-      `,
-      [id]
-    );
+    const [rows] =
+      await db.execute(
+        `
+        SELECT
+          id,
+          name,
+          location,
+          phone_number,
+          call_status,
+          description,
+          rating,
+          price_per_night,
+          total_rooms,
+          created_at
+        FROM hotels
+        WHERE id = ?
+        LIMIT 1
+        `,
+        [id]
+      );
 
     if (rows.length === 0) {
       return null;
@@ -296,56 +310,83 @@ const getHotelById = async (id) => {
 
     const hotel = rows[0];
 
+    // =====================================================
+    // GET IMAGES
+    // =====================================================
 
-    // Get images
-    const [images] = await db.execute(
-      `
-      SELECT
-        id,
-        image_url,
-        public_id
-      FROM hotel_images
-      WHERE hotel_id = ?
-      `,
-      [id]
-    );
+    const [images] =
+      await db.execute(
+        `
+        SELECT
+          id,
+          image_url,
+          public_id
+        FROM hotel_images
+        WHERE hotel_id = ?
+        ORDER BY id ASC
+        `,
+        [id]
+      );
 
+    // =====================================================
+    // GET AMENITIES
+    // =====================================================
 
-   
-    const [amenities] = await db.execute(
-      `
-      SELECT amenity
-      FROM hotel_amenities
-      WHERE hotel_id = ?
-      `,
-      [id]
-    );
+    const [amenities] =
+      await db.execute(
+        `
+        SELECT
+          amenity
+        FROM hotel_amenities
+        WHERE hotel_id = ?
+        ORDER BY id ASC
+        `,
+        [id]
+      );
 
+    // =====================================================
+    // FORMAT IMAGES
+    // =====================================================
 
-    hotel.images = images.map((image) => ({
-      id: image.id,
-      url: image.image_url,
-      public_id: image.public_id,
-    }));
+    hotel.images =
+      images.map((image) => ({
+        id: image.id,
+        url: image.image_url,
+        public_id: image.public_id,
+      }));
 
+    // =====================================================
+    // FORMAT AMENITIES
+    // =====================================================
 
-    hotel.amenities = amenities.map(
-      (item) => item.amenity
-    );
-
+    hotel.amenities =
+      amenities.map(
+        (item) => item.amenity
+      );
 
     return hotel;
 
   } catch (error) {
-    console.log("Get hotel by ID model error:", error);
+
+    console.log(
+      "Get hotel by ID model error:",
+      error
+    );
+
     throw error;
   }
 };
 
 
+// =====================================================
+// CREATE HOTEL
+// =====================================================
+
 const createHotel = async ({
   name,
   location,
+  phoneNumber,
+  callStatus = "available",
   description,
   rating,
   pricePerNight,
@@ -353,45 +394,69 @@ const createHotel = async ({
 }) => {
   try {
 
-    const [result] = await db.execute(
-      `
-      INSERT INTO hotels
-      (
-        name,
-        location,
-        description,
-        rating,
-        price_per_night,
-        total_rooms
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [
-        name,
-        location,
-        description,
-        rating || 0,
-        pricePerNight,
-        totalRooms,
-      ]
-    );
+    // =====================================================
+    // INSERT HOTEL
+    // =====================================================
+
+    const [result] =
+      await db.execute(
+        `
+        INSERT INTO hotels
+        (
+          name,
+          location,
+          phone_number,
+          call_status,
+          description,
+          rating,
+          price_per_night,
+          total_rooms
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          name,
+          location,
+          phoneNumber || null,
+          callStatus || "available",
+          description || null,
+          rating || 0,
+          pricePerNight,
+          totalRooms,
+        ]
+      );
+
+    // =====================================================
+    // RETURN
+    // =====================================================
 
     return {
       id: result.insertId,
       name,
       location,
-      description,
+      phoneNumber: phoneNumber || null,
+      callStatus: callStatus || "available",
+      description: description || null,
       rating: rating || 0,
       pricePerNight,
       totalRooms,
     };
 
   } catch (error) {
-    console.log("Create hotel model error:", error);
+
+    console.log(
+      "Create hotel model error:",
+      error
+    );
+
     throw error;
   }
 };
 
+
+// =====================================================
+// ADD HOTEL IMAGE
+// =====================================================
 
 const addHotelImage = async (
   hotelId,
@@ -400,31 +465,110 @@ const addHotelImage = async (
 ) => {
   try {
 
-    const [result] = await db.execute(
-      `
-      INSERT INTO hotel_images
-      (
-        hotel_id,
-        image_url,
-        public_id
-      )
-      VALUES (?, ?, ?)
-      `,
-      [
-        hotelId,
-        imageUrl,
-        publicId,
-      ]
-    );
+    const [result] =
+      await db.execute(
+        `
+        INSERT INTO hotel_images
+        (
+          hotel_id,
+          image_url,
+          public_id
+        )
+        VALUES (?, ?, ?)
+        `,
+        [
+          hotelId,
+          imageUrl,
+          publicId,
+        ]
+      );
 
     return result.insertId;
 
   } catch (error) {
-    console.log("Add hotel image model error:", error);
+
+    console.log(
+      "Add hotel image model error:",
+      error
+    );
+
     throw error;
   }
 };
 
+
+// =====================================================
+// GET HOTEL IMAGE BY ID
+// =====================================================
+
+const getHotelImageById = async (
+  imageId
+) => {
+  try {
+
+    const [rows] =
+      await db.execute(
+        `
+        SELECT
+          id,
+          hotel_id,
+          image_url,
+          public_id
+        FROM hotel_images
+        WHERE id = ?
+        `,
+        [imageId]
+      );
+
+    return rows[0] || null;
+
+  } catch (error) {
+
+    console.log(
+      "Get hotel image model error:",
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+// =====================================================
+// DELETE HOTEL IMAGE
+// =====================================================
+
+const deleteHotelImage = async (
+  imageId
+) => {
+  try {
+
+    const [result] =
+      await db.execute(
+        `
+        DELETE FROM hotel_images
+        WHERE id = ?
+        `,
+        [imageId]
+      );
+
+    return result.affectedRows > 0;
+
+  } catch (error) {
+
+    console.log(
+      "Delete hotel image model error:",
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+// =====================================================
+// ADD HOTEL AMENITY
+// =====================================================
 
 const addHotelAmenity = async (
   hotelId,
@@ -432,24 +576,26 @@ const addHotelAmenity = async (
 ) => {
   try {
 
-    const [result] = await db.execute(
-      `
-      INSERT INTO hotel_amenities
-      (
-        hotel_id,
-        amenity
-      )
-      VALUES (?, ?)
-      `,
-      [
-        hotelId,
-        amenity,
-      ]
-    );
+    const [result] =
+      await db.execute(
+        `
+        INSERT INTO hotel_amenities
+        (
+          hotel_id,
+          amenity
+        )
+        VALUES (?, ?)
+        `,
+        [
+          hotelId,
+          amenity,
+        ]
+      );
 
     return result.insertId;
 
   } catch (error) {
+
     console.log(
       "Add hotel amenity model error:",
       error
@@ -460,11 +606,57 @@ const addHotelAmenity = async (
 };
 
 
-const updateHotel = async (id, data) => {
+// =====================================================
+// DELETE HOTEL AMENITIES
+// =====================================================
+
+const deleteHotelAmenities = async (
+  hotelId
+) => {
   try {
+
+    const [result] =
+      await db.execute(
+        `
+        DELETE FROM hotel_amenities
+        WHERE hotel_id = ?
+        `,
+        [hotelId]
+      );
+
+    return result.affectedRows;
+
+  } catch (error) {
+
+    console.log(
+      "Delete hotel amenities model error:",
+      error
+    );
+
+    throw error;
+  }
+};
+
+
+// =====================================================
+// UPDATE HOTEL
+// =====================================================
+
+const updateHotel = async (
+  id,
+  data
+) => {
+  try {
+
+    // =====================================================
+    // FIELD MAP
+    // =====================================================
+
     const fieldMap = {
       name: "name",
       location: "location",
+      phoneNumber: "phone_number",
+      callStatus: "call_status",
       description: "description",
       rating: "rating",
       pricePerNight: "price_per_night",
@@ -474,7 +666,12 @@ const updateHotel = async (id, data) => {
     const fields = [];
     const values = [];
 
+    // =====================================================
+    // BUILD UPDATE QUERY
+    // =====================================================
+
     for (const key in data) {
+
       if (
         data[key] !== undefined &&
         fieldMap[key]
@@ -487,24 +684,38 @@ const updateHotel = async (id, data) => {
       }
     }
 
+    // =====================================================
+    // NO FIELDS
+    // =====================================================
+
     if (fields.length === 0) {
       return false;
     }
 
+    // =====================================================
+    // HOTEL ID
+    // =====================================================
+
     values.push(id);
 
-    const [result] = await db.execute(
-      `
-      UPDATE hotels
-      SET ${fields.join(", ")}
-      WHERE id = ?
-      `,
-      values
-    );
+    // =====================================================
+    // UPDATE
+    // =====================================================
+
+    const [result] =
+      await db.execute(
+        `
+        UPDATE hotels
+        SET ${fields.join(", ")}
+        WHERE id = ?
+        `,
+        values
+      );
 
     return result.affectedRows > 0;
 
   } catch (error) {
+
     console.log(
       "Update hotel model error:",
       error
@@ -515,97 +726,150 @@ const updateHotel = async (id, data) => {
 };
 
 
-const deleteHotel = async (id) => {
+// =====================================================
+// DELETE HOTEL
+// =====================================================
+
+const deleteHotel = async (
+  id
+) => {
   try {
 
-    const [result] = await db.execute(
-      `
-      DELETE FROM hotels
-      WHERE id = ?
-      `,
-      [id]
-    );
+    const [result] =
+      await db.execute(
+        `
+        DELETE FROM hotels
+        WHERE id = ?
+        `,
+        [id]
+      );
 
     return result.affectedRows > 0;
 
   } catch (error) {
-    console.log("Delete hotel model error:", error);
+
+    console.log(
+      "Delete hotel model error:",
+      error
+    );
+
     throw error;
   }
 };
 
 
-const searchHotels = async (search) => {
+// =====================================================
+// SEARCH HOTELS
+// =====================================================
+
+const searchHotels = async (
+  search
+) => {
   try {
 
-    const [hotels] = await db.execute(
-      `
-      SELECT
-        id,
-        name,
-        location,
-        description,
-        rating,
-        price_per_night,
-        total_rooms
-      FROM hotels
-      WHERE
-        name LIKE ?
-        OR location LIKE ?
-      ORDER BY rating DESC
-      `,
-      [
-        `%${search}%`,
-        `%${search}%`,
-      ]
-    );
-
-
-    for (const hotel of hotels) {
-
-      const [images] = await db.execute(
+    const [hotels] =
+      await db.execute(
         `
         SELECT
           id,
-          image_url,
-          public_id
-        FROM hotel_images
-        WHERE hotel_id = ?
+          name,
+          location,
+          phone_number,
+          call_status,
+          description,
+          rating,
+          price_per_night,
+          total_rooms
+        FROM hotels
+        WHERE
+          name LIKE ?
+          OR location LIKE ?
+        ORDER BY rating DESC
         `,
-        [hotel.id]
+        [
+          `%${search}%`,
+          `%${search}%`,
+        ]
       );
 
+    // =====================================================
+    // IMAGES + AMENITIES
+    // =====================================================
 
-      const [amenities] = await db.execute(
-        `
-        SELECT amenity
-        FROM hotel_amenities
-        WHERE hotel_id = ?
-        `,
-        [hotel.id]
-      );
+    for (const hotel of hotels) {
 
+      // ---------------------------------------------------
+      // IMAGES
+      // ---------------------------------------------------
 
-      hotel.images = images.map((image) => ({
-        id: image.id,
-        url: image.image_url,
-        public_id: image.public_id,
-      }));
+      const [images] =
+        await db.execute(
+          `
+          SELECT
+            id,
+            image_url,
+            public_id
+          FROM hotel_images
+          WHERE hotel_id = ?
+          ORDER BY id ASC
+          `,
+          [hotel.id]
+        );
 
+      // ---------------------------------------------------
+      // AMENITIES
+      // ---------------------------------------------------
 
-      hotel.amenities = amenities.map(
-        (item) => item.amenity
-      );
+      const [amenities] =
+        await db.execute(
+          `
+          SELECT
+            amenity
+          FROM hotel_amenities
+          WHERE hotel_id = ?
+          ORDER BY id ASC
+          `,
+          [hotel.id]
+        );
+
+      // ---------------------------------------------------
+      // FORMAT IMAGES
+      // ---------------------------------------------------
+
+      hotel.images =
+        images.map((image) => ({
+          id: image.id,
+          url: image.image_url,
+          public_id: image.public_id,
+        }));
+
+      // ---------------------------------------------------
+      // FORMAT AMENITIES
+      // ---------------------------------------------------
+
+      hotel.amenities =
+        amenities.map(
+          (item) => item.amenity
+        );
     }
-
 
     return hotels;
 
   } catch (error) {
-    console.log("Search hotels model error:", error);
+
+    console.log(
+      "Search hotels model error:",
+      error
+    );
+
     throw error;
   }
 };
+
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 export {
   getHotels,
@@ -616,4 +880,7 @@ export {
   updateHotel,
   deleteHotel,
   searchHotels,
+  deleteHotelAmenities,
+  getHotelImageById,
+  deleteHotelImage,
 };

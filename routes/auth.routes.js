@@ -1,22 +1,38 @@
 import express from "express";
 import {
+  forgotPassword,
   getCurrentUser,
   googleCallback,
   login,
   logout,
   register,
+  resendOTP,
+  resetPassword,
   verifyOTP,
+  verifyResetOTP,
 } from "../controllers/auth.controller.js";
 import protect from "../middleware/auth.middleware.js";
 import passport from "../config/google.js";
-import { loginValidation, registerValidation, verifyOTPValidation } from "../middleware/auth.validation.js";
+import {
+  loginValidation,
+  registerValidation,
+  verifyOTPValidation,
+} from "../middleware/auth.validation.js";
 import validate from "../middleware/validation.middleware.js";
 
 const authRoute = express.Router();
 
 authRoute.post("/register", registerValidation, validate, register);
 authRoute.post("/verify-otp", verifyOTPValidation, validate, verifyOTP);
-authRoute.post("/login",loginValidation, validate, login);
+authRoute.post("/resend-otp", resendOTP);
+
+authRoute.post("/forgot-password", forgotPassword);
+
+authRoute.post("/verify-reset-otp", verifyResetOTP);
+
+authRoute.post("/reset-password", resetPassword);
+
+authRoute.post("/login", loginValidation, validate, login);
 authRoute.get("/me", protect, getCurrentUser);
 authRoute.post("/logout", logout);
 

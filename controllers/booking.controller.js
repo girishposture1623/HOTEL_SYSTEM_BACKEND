@@ -10,8 +10,13 @@ import {
 } from "../models/booking.model.js";
 
 
+// =====================================================
+// CREATE BOOKING
+// =====================================================
+
 const postBooking = async (req, res) => {
   try {
+
     const userId = req.user.id;
 
     const {
@@ -24,9 +29,9 @@ const postBooking = async (req, res) => {
     } = req.body;
 
 
-    // ----------------------------------
-    // Required fields
-    // ----------------------------------
+    // =================================================
+    // REQUIRED FIELDS
+    // =================================================
 
     if (
       !hotelId ||
@@ -43,41 +48,87 @@ const postBooking = async (req, res) => {
     }
 
 
-    // ----------------------------------
-    // Validate numbers
-    // ----------------------------------
+    // =================================================
+    // VALIDATE NUMBERS
+    // =================================================
+
+    const adultCount =
+      Number(adults);
+
+    const childCount =
+      Number(children || 0);
+
+    const roomCount =
+      Number(rooms);
+
 
     if (
-      Number(adults) < 1 ||
-      Number(rooms) < 1 ||
-      Number(children || 0) < 0
+      !Number.isInteger(adultCount) ||
+      adultCount < 1
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid guest or room count",
+        message:
+          "Adults must be at least 1",
       });
     }
 
 
-    // ----------------------------------
-    // Validate dates
-    // ----------------------------------
-
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
-
     if (
-      isNaN(checkInDate.getTime()) ||
-      isNaN(checkOutDate.getTime())
+      !Number.isInteger(childCount) ||
+      childCount < 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid check-in or check-out date",
+        message:
+          "Invalid children count",
       });
     }
 
 
-    if (checkOutDate <= checkInDate) {
+    if (
+      !Number.isInteger(roomCount) ||
+      roomCount < 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Rooms must be at least 1",
+      });
+    }
+
+
+    // =================================================
+    // VALIDATE DATES
+    // =================================================
+
+    const checkInDate =
+      new Date(checkIn);
+
+    const checkOutDate =
+      new Date(checkOut);
+
+
+    if (
+      Number.isNaN(
+        checkInDate.getTime()
+      ) ||
+      Number.isNaN(
+        checkOutDate.getTime()
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid check-in or check-out date",
+      });
+    }
+
+
+    if (
+      checkOutDate <=
+      checkInDate
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -86,24 +137,26 @@ const postBooking = async (req, res) => {
     }
 
 
-    // ----------------------------------
-    // Create booking
-    // ----------------------------------
+    // =================================================
+    // CREATE BOOKING
+    // =================================================
 
-    const booking = await createBooking({
-      userId,
-      hotelId,
-      checkIn,
-      checkOut,
-      adults: Number(adults),
-      children: Number(children || 0),
-      rooms: Number(rooms),
-    });
+    const booking =
+      await createBooking({
+        userId,
+        hotelId,
+        checkIn,
+        checkOut,
+        adults: adultCount,
+        children: childCount,
+        rooms: roomCount,
+      });
 
 
     return res.status(201).json({
       success: true,
-      message: "Booking created successfully",
+      message:
+        "Booking created successfully",
       booking,
     });
 
@@ -116,17 +169,30 @@ const postBooking = async (req, res) => {
     );
 
 
-    // Hotel not found
-    if (error.message === "HOTEL_NOT_FOUND") {
+    // =================================================
+    // HOTEL NOT FOUND
+    // =================================================
+
+    if (
+      error.message ===
+      "HOTEL_NOT_FOUND"
+    ) {
       return res.status(404).json({
         success: false,
-        message: "Hotel not found",
+        message:
+          "Hotel not found",
       });
     }
 
 
-    // Rooms unavailable
-    if (error.message === "ROOMS_NOT_AVAILABLE") {
+    // =================================================
+    // ROOMS NOT AVAILABLE
+    // =================================================
+
+    if (
+      error.message ===
+      "ROOMS_NOT_AVAILABLE"
+    ) {
       return res.status(409).json({
         success: false,
         message:
@@ -135,39 +201,64 @@ const postBooking = async (req, res) => {
     }
 
 
-    // Invalid dates
-    if (error.message === "INVALID_DATES") {
+    // =================================================
+    // INVALID DATES
+    // =================================================
+
+    if (
+      error.message ===
+      "INVALID_DATES"
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid booking dates",
+        message:
+          "Invalid booking dates",
       });
     }
 
 
     return res.status(500).json({
       success: false,
-      message: "Failed to create booking",
+      message:
+        "Failed to create booking",
     });
   }
 };
 
-const getBooking = async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const booking = await getBookingById(id);
+// =====================================================
+// GET SINGLE BOOKING
+// =====================================================
+
+const getBooking = async (
+  req,
+  res
+) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+
+    const booking =
+      await getBookingById(id);
+
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: "Booking not found",
+        message:
+          "Booking not found",
       });
     }
+
 
     return res.status(200).json({
       success: true,
       booking,
     });
+
 
   } catch (error) {
 
@@ -176,24 +267,44 @@ const getBooking = async (req, res) => {
       error
     );
 
+
     return res.status(500).json({
       success: false,
-      message: "Failed to get booking",
+      message:
+        "Failed to get booking",
     });
   }
 };
 
-const getMyBookings = async (req, res) => {
-  try {
-    const userId = req.user.id;
 
-    const bookings = await getUserBookings(userId);
+// =====================================================
+// GET MY BOOKINGS
+// =====================================================
+
+const getMyBookings = async (
+  req,
+  res
+) => {
+
+  try {
+
+    const userId =
+      req.user.id;
+
+
+    const bookings =
+      await getUserBookings(
+        userId
+      );
+
 
     return res.status(200).json({
       success: true,
-      count: bookings.length,
+      count:
+        bookings.length,
       bookings,
     });
+
 
   } catch (error) {
 
@@ -202,22 +313,40 @@ const getMyBookings = async (req, res) => {
       error
     );
 
+
     return res.status(500).json({
       success: false,
-      message: "Failed to get your bookings",
+      message:
+        "Failed to get your bookings",
     });
   }
 };
 
-const cancelMyBooking = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { id } = req.params;
 
-    const cancelled = await cancelBooking(
-      id,
-      userId
-    );
+// =====================================================
+// CANCEL MY BOOKING
+// =====================================================
+
+const cancelMyBooking = async (
+  req,
+  res
+) => {
+
+  try {
+
+    const userId =
+      req.user.id;
+
+    const { id } =
+      req.params;
+
+
+    const cancelled =
+      await cancelBooking(
+        id,
+        userId
+      );
+
 
     if (!cancelled) {
       return res.status(404).json({
@@ -227,10 +356,13 @@ const cancelMyBooking = async (req, res) => {
       });
     }
 
+
     return res.status(200).json({
       success: true,
-      message: "Booking cancelled successfully",
+      message:
+        "Booking cancelled successfully",
     });
+
 
   } catch (error) {
 
@@ -239,22 +371,38 @@ const cancelMyBooking = async (req, res) => {
       error
     );
 
+
     return res.status(500).json({
       success: false,
-      message: "Failed to cancel booking",
+      message:
+        "Failed to cancel booking",
     });
   }
 };
 
-const getBookings = async (req, res) => {
+
+// =====================================================
+// ADMIN - GET ALL BOOKINGS
+// =====================================================
+
+const getBookings = async (
+  req,
+  res
+) => {
+
   try {
-    const bookings = await getAllBookings();
+
+    const bookings =
+      await getAllBookings();
+
 
     return res.status(200).json({
       success: true,
-      count: bookings.length,
+      count:
+        bookings.length,
       bookings,
     });
+
 
   } catch (error) {
 
@@ -263,52 +411,85 @@ const getBookings = async (req, res) => {
       error
     );
 
+
     return res.status(500).json({
       success: false,
-      message: "Failed to get bookings",
+      message:
+        "Failed to get bookings",
     });
   }
 };
 
-const changeBookingStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
 
+// =====================================================
+// ADMIN - CHANGE BOOKING STATUS
+// =====================================================
+
+const changeBookingStatus = async (
+  req,
+  res
+) => {
+
+  try {
+
+    const { id } =
+      req.params;
+
+    const { status } =
+      req.body;
+
+
+    // =================================================
+    // ALLOWED STATUS
+    // =================================================
 
     const allowedStatus = [
       "pending",
       "confirmed",
       "cancelled",
+      "expired",
     ];
 
 
-    if (!allowedStatus.includes(status)) {
+    if (
+      !allowedStatus.includes(
+        status
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid booking status",
+        message:
+          "Invalid booking status",
       });
     }
 
 
-    const updated = await updateBookingStatus(
-      id,
-      status
-    );
+    // =================================================
+    // UPDATE
+    // =================================================
+
+    const updated =
+      await updateBookingStatus(
+        id,
+        status
+      );
 
 
     if (!updated) {
       return res.status(404).json({
         success: false,
-        message: "Booking not found",
+        message:
+          "Booking not found",
       });
     }
 
 
     return res.status(200).json({
       success: true,
-      message: "Booking status updated successfully",
+      message:
+        "Booking status updated successfully",
     });
+
 
   } catch (error) {
 
@@ -317,15 +498,27 @@ const changeBookingStatus = async (req, res) => {
       error
     );
 
+
     return res.status(500).json({
       success: false,
-      message: "Failed to update booking status",
+      message:
+        "Failed to update booking status",
     });
   }
 };
 
-const checkAvailability = async (req, res) => {
+
+// =====================================================
+// CHECK ROOM AVAILABILITY
+// =====================================================
+
+const checkAvailability = async (
+  req,
+  res
+) => {
+
   try {
+
     const {
       hotelId,
       checkIn,
@@ -333,7 +526,11 @@ const checkAvailability = async (req, res) => {
       rooms,
     } = req.body;
 
-    // Required fields
+
+    // =================================================
+    // REQUIRED
+    // =================================================
+
     if (
       !hotelId ||
       !checkIn ||
@@ -347,11 +544,19 @@ const checkAvailability = async (req, res) => {
       });
     }
 
-    // Validate rooms
-    const requestedRooms = Number(rooms);
+
+    // =================================================
+    // ROOMS
+    // =================================================
+
+    const requestedRooms =
+      Number(rooms);
+
 
     if (
-      !Number.isInteger(requestedRooms) ||
+      !Number.isInteger(
+        requestedRooms
+      ) ||
       requestedRooms <= 0
     ) {
       return res.status(400).json({
@@ -361,21 +566,38 @@ const checkAvailability = async (req, res) => {
       });
     }
 
-    // Validate dates
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
+
+    // =================================================
+    // DATES
+    // =================================================
+
+    const checkInDate =
+      new Date(checkIn);
+
+    const checkOutDate =
+      new Date(checkOut);
+
 
     if (
-      Number.isNaN(checkInDate.getTime()) ||
-      Number.isNaN(checkOutDate.getTime())
+      Number.isNaN(
+        checkInDate.getTime()
+      ) ||
+      Number.isNaN(
+        checkOutDate.getTime()
+      )
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid check-in or check-out date",
+        message:
+          "Invalid check-in or check-out date",
       });
     }
 
-    if (checkInDate >= checkOutDate) {
+
+    if (
+      checkInDate >=
+      checkOutDate
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -383,44 +605,79 @@ const checkAvailability = async (req, res) => {
       });
     }
 
+
+    // =================================================
+    // CHECK DATABASE
+    // =================================================
+
     const availability =
       await checkRoomAvailability({
         hotelId,
         checkIn,
         checkOut,
-        rooms: requestedRooms,
+        rooms:
+          requestedRooms,
       });
 
-    if (!availability.hotelExists) {
+
+    // =================================================
+    // HOTEL NOT FOUND
+    // =================================================
+
+    if (
+      !availability.hotelExists
+    ) {
       return res.status(404).json({
         success: false,
-        message: "Hotel not found",
+        message:
+          "Hotel not found",
       });
     }
 
-    if (!availability.isAvailable) {
+
+    // =================================================
+    // NOT AVAILABLE
+    // =================================================
+
+    if (
+      !availability.isAvailable
+    ) {
       return res.status(409).json({
         success: false,
-        message: "Not enough rooms available",
+        message:
+          "Not enough rooms available",
+
         availableRooms:
           availability.availableRooms,
+
         requestedRooms:
           availability.requestedRooms,
       });
     }
 
+
+    // =================================================
+    // AVAILABLE
+    // =================================================
+
     return res.status(200).json({
       success: true,
-      message: "Rooms are available",
+      message:
+        "Rooms are available",
+
       available: true,
+
       availability,
     });
 
+
   } catch (error) {
+
     console.log(
       "Availability controller error:",
       error
     );
+
 
     return res.status(500).json({
       success: false,
@@ -430,28 +687,52 @@ const checkAvailability = async (req, res) => {
   }
 };
 
-const expireBookings = async (req, res) => {
+
+// =====================================================
+// EXPIRE PENDING BOOKINGS
+// =====================================================
+
+const expireBookings = async (
+  req,
+  res
+) => {
+
   try {
-    const expiredCount = await expirePendingBookings();
+
+    const expiredCount =
+      await expirePendingBookings();
+
 
     return res.status(200).json({
       success: true,
-      message: "Pending bookings expired successfully",
+
+      message:
+        "Pending bookings expired successfully",
+
       expiredCount,
     });
 
+
   } catch (error) {
+
     console.log(
       "Expire bookings controller error:",
       error
     );
 
+
     return res.status(500).json({
       success: false,
-      message: "Failed to expire pending bookings",
+      message:
+        "Failed to expire pending bookings",
     });
   }
 };
+
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 export {
   postBooking,
@@ -461,6 +742,5 @@ export {
   getBookings,
   changeBookingStatus,
   checkAvailability,
-  expirePendingBookings,
-  expireBookings
+  expireBookings,
 };

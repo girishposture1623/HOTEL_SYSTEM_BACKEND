@@ -116,6 +116,22 @@ const saveOTP = async (userId, otp, expiresAt) => {
   }
 };
 
+const updateUserPassword = async (
+  userId,
+  password
+) => {
+  const [result] = await db.query(
+    `
+      UPDATE users
+      SET password = ?
+      WHERE id = ?
+    `,
+    [password, userId]
+  );
+
+  return result;
+};
+
 const findUserByEmailAndOTP = async (email, otp) => {
   try {
     const [rows] = await db.execute(
@@ -150,6 +166,29 @@ const verifyUserOTP = async (userId) => {
     console.log("Verify OTP error:", error);
     throw error;
   }
+};
+
+const updateUserOTP = async (
+  userId,
+  otp,
+  otpExpiresAt
+) => {
+  const [result] = await db.query(
+    `
+    UPDATE users
+    SET
+      otp = ?,
+      otp_expires_at = ?
+    WHERE id = ?
+    `,
+    [
+      otp,
+      otpExpiresAt,
+      userId,
+    ]
+  );
+
+  return result;
 };
 
 const linkGoogleAccount = async (
@@ -230,5 +269,7 @@ export {
   findUserByEmailAndOTP,
   verifyUserOTP,
   linkGoogleAccount,
-  createGoogleUser
+  createGoogleUser,
+  updateUserOTP,
+  updateUserPassword
 };
