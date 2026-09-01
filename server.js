@@ -63,7 +63,7 @@ app.get("/health", (req, res) => {
 
 
 app.use("/api/auth", authLimiter,authRoute);
-app.use("/api/home", hotelRoute);
+app.use("/api/hotel", hotelRoute);
 app.use("/api/payments", paymentRoute);
 app.use("/api/bookings", bookingRoute);
 app.use("/api/admin", adminRoute);
