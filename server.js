@@ -42,12 +42,15 @@ app.use(express.json());
 app.use(cookieParser());
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 10 * 60 * 1000,
   max: 10,
-  message: {
-    success: false,
-    message: "Too many authentication attempts. Try again later.",
-  },
+  // message: {
+  //   success: false,
+  //   message: "Too many authentication attempts. Try again later.",
+  // },
+  handler:(req, res)=>{
+res.redirect(`${process.env.FRONTEND_URL}/auth-error`)
+  }
 });
 
 app.get("/health", (req, res) => {
