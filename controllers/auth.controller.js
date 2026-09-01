@@ -530,13 +530,13 @@ const googleCallback = async (req, res) => {
     });
 
     // Redirect frontend
-    return res.redirect("http://localhost:5173/");
+    return res.redirect(`${process.env.FRONTEND_URL}/`);
   } catch (error) {
     console.log("Google callback error:", error);
 
     return res.redirect(
-      "http://localhost:5173/login?error=google_login_failed",
-    );
+  `${process.env.FRONTEND_URL}/login?error=google_login_failed`,
+);
   }
 };
 
