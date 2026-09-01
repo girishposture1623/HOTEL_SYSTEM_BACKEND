@@ -62,7 +62,7 @@ app.get("/api/health", (req, res) => {
 
 
 
-app.use("/api/auth", authLimiter,authRoute);
+app.use("/api/auth",authLimiter, authRoute);
 app.use("/api/hotel", hotelRoute);
 app.use("/api/payments", paymentRoute);
 app.use("/api/bookings", bookingRoute);
