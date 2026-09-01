@@ -53,7 +53,7 @@ res.redirect(`${process.env.FRONTEND_URL}/auth-error`)
   }
 });
 
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     message: "Hotel Booking API is running",
