@@ -47,9 +47,9 @@ const getHotels = async ({
     // =====================================================
 
     if (location && location.trim()) {
-      conditions.push(
-        `LOWER(location) LIKE LOWER(?)`
-      );
+      conditions.push(`
+        LOWER(location) LIKE LOWER(?)
+      `);
 
       values.push(
         `%${location.trim()}%`
@@ -124,7 +124,7 @@ const getHotels = async ({
     }
 
     // =====================================================
-    // WHERE
+    // WHERE CLAUSE
     // =====================================================
 
     const whereClause =
@@ -169,7 +169,7 @@ const getHotels = async ({
       Number(countRows[0]?.total) || 0;
 
     // =====================================================
-    // GET ALL MATCHING HOTELS
+    // GET HOTELS
     // =====================================================
 
     const [hotels] =
@@ -194,66 +194,112 @@ const getHotels = async ({
       );
 
     // =====================================================
-    // GET IMAGES + AMENITIES
+    // NO HOTELS
     // =====================================================
 
-    for (const hotel of hotels) {
+    if (hotels.length === 0) {
+      return {
+        hotels: [],
+        total,
+      };
+    }
 
-      // ---------------------------------------------------
-      // IMAGES
-      // ---------------------------------------------------
+    // =====================================================
+    // HOTEL IDS
+    // =====================================================
 
-      const [images] =
-        await db.execute(
-          `
-          SELECT
-            id,
-            image_url,
-            public_id
-          FROM hotel_images
-          WHERE hotel_id = ?
-          ORDER BY id ASC
-          `,
-          [hotel.id]
-        );
+    const hotelIds =
+      hotels.map(
+        (hotel) => hotel.id
+      );
 
-      // ---------------------------------------------------
-      // AMENITIES
-      // ---------------------------------------------------
+    const placeholders =
+      hotelIds
+        .map(() => "?")
+        .join(",");
 
-      const [amenities] =
-        await db.execute(
-          `
-          SELECT
-            id,
-            amenity
-          FROM hotel_amenities
-          WHERE hotel_id = ?
-          ORDER BY id ASC
-          `,
-          [hotel.id]
-        );
+    // =====================================================
+    // GET ALL IMAGES IN ONE QUERY
+    // =====================================================
 
-      // ---------------------------------------------------
-      // FORMAT IMAGES
-      // ---------------------------------------------------
+    const [images] =
+      await db.execute(
+        `
+        SELECT
+          id,
+          hotel_id,
+          image_url,
+          public_id
+        FROM hotel_images
+        WHERE hotel_id IN (${placeholders})
+        ORDER BY id ASC
+        `,
+        hotelIds
+      );
 
+    // =====================================================
+    // GET ALL AMENITIES IN ONE QUERY
+    // =====================================================
+
+    const [amenities] =
+      await db.execute(
+        `
+        SELECT
+          id,
+          hotel_id,
+          amenity
+        FROM hotel_amenities
+        WHERE hotel_id IN (${placeholders})
+        ORDER BY id ASC
+        `,
+        hotelIds
+      );
+
+    // =====================================================
+    // IMAGE MAP
+    // =====================================================
+
+    const imageMap = {};
+
+    images.forEach((image) => {
+      if (!imageMap[image.hotel_id]) {
+        imageMap[image.hotel_id] = [];
+      }
+
+      imageMap[image.hotel_id].push({
+        id: image.id,
+        url: image.image_url,
+        public_id: image.public_id,
+      });
+    });
+
+    // =====================================================
+    // AMENITY MAP
+    // =====================================================
+
+    const amenityMap = {};
+
+    amenities.forEach((item) => {
+      if (!amenityMap[item.hotel_id]) {
+        amenityMap[item.hotel_id] = [];
+      }
+
+      amenityMap[item.hotel_id].push(
+        item.amenity
+      );
+    });
+
+    // =====================================================
+    // ATTACH IMAGES + AMENITIES
+    // =====================================================
+
+    hotels.forEach((hotel) => {
       hotel.images =
-        images.map((image) => ({
-          id: image.id,
-          url: image.image_url,
-          public_id: image.public_id,
-        }));
-
-      // ---------------------------------------------------
-      // FORMAT AMENITIES
-      // ---------------------------------------------------
+        imageMap[hotel.id] || [];
 
       hotel.amenities =
-        amenities.map(
-          (item) => item.amenity
-        );
-    }
+        amenityMap[hotel.id] || [];
+    });
 
     // =====================================================
     // RETURN

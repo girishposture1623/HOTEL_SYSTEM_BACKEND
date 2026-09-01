@@ -59,9 +59,6 @@ const getAllHotels = async (req, res) => {
 };
 
 
-// =====================================================
-// GET HOTEL BY ID
-// =====================================================
 
 const getHotelid = async (req, res) => {
   try {
