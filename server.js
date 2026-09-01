@@ -43,7 +43,7 @@ app.use(cookieParser());
 
 const authLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 10,
+  max: 30,
   // message: {
   //   success: false,
   //   message: "Too many authentication attempts. Try again later.",
