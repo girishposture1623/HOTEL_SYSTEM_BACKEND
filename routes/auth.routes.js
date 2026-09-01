@@ -47,8 +47,9 @@ authRoute.get(
   "/google/callback",
   passport.authenticate("google", {
     session: false,
+    failureRedirect: `${process.env.FRONTEND_URL}/login`,
   }),
-  googleCallback,
+  googleCallback
 );
 
 export default authRoute;
