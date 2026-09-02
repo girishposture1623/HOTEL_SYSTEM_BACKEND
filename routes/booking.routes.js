@@ -6,6 +6,7 @@ import {
   getMyBookings,
   cancelMyBooking,
   checkAvailability,
+  changePaymentStatus,
 } from "../controllers/booking.controller.js";
 
 import protect from "../middleware/auth.middleware.js";
@@ -34,5 +35,11 @@ bookingRoute.get("/:id", protect, getBooking);
 
 // Cancel booking
 bookingRoute.patch("/:id/cancel", protect, cancelMyBooking);
+
+bookingRoute.patch(
+  "/:id/payment-status",
+  protect,
+  changePaymentStatus
+);
 
 export default bookingRoute;

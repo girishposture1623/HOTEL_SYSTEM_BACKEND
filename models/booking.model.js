@@ -1,10 +1,9 @@
 import db from "../config/db.js";
 
-
-
 const createBooking = async ({
   userId,
   hotelId,
+  roomId,
   checkIn,
   checkOut,
   adults,
@@ -18,12 +17,15 @@ const createBooking = async ({
 
     await connection.beginTransaction();
 
+    // =====================================================
+    // GET HOTEL
+    // =====================================================
+
     const [hotelRows] = await connection.execute(
       `
       SELECT
         id,
         name,
-        price_per_night,
         total_rooms
       FROM hotels
       WHERE id = ?
@@ -38,46 +40,88 @@ const createBooking = async ({
 
     const hotel = hotelRows[0];
 
+    // =====================================================
+    // GET SELECTED ROOM
+    // =====================================================
+
+    const [roomRows] = await connection.execute(
+      `
+      SELECT
+        id,
+        hotel_id,
+        room_number,
+        room_type,
+        price_per_night,
+        capacity,
+        bed_type,
+        room_size,
+        status
+      FROM rooms
+      WHERE id = ?
+        AND hotel_id = ?
+      LIMIT 1
+      `,
+      [roomId, hotelId]
+    );
+
+    if (roomRows.length === 0) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
+
+    const room = roomRows[0];
+
+    // =====================================================
+    // ROOM STATUS
+    // =====================================================
+
+    if (room.status !== "available") {
+      throw new Error("ROOM_NOT_AVAILABLE");
+    }
+
+    // =====================================================
+    // CHECK HOTEL ROOM AVAILABILITY
+    // =====================================================
 
     const [bookingRows] = await connection.execute(
-  `
-  SELECT
-    COALESCE(SUM(rooms_booked), 0) AS booked_rooms
-  FROM bookings
-  WHERE hotel_id = ?
+      `
+      SELECT
+        COALESCE(SUM(rooms_booked), 0) AS booked_rooms
+      FROM bookings
+      WHERE hotel_id = ?
 
-    AND booking_status IN ('pending', 'confirmed')
+        AND booking_status IN ('pending', 'confirmed')
 
-    AND (
-      booking_status = 'confirmed'
-      OR expires_at > NOW()
-    )
+        AND (
+          booking_status = 'confirmed'
+          OR expires_at > NOW()
+        )
 
-    AND check_in < ?
-    AND check_out > ?
-  `,
-  [
-    hotelId,
-    checkOut,
-    checkIn,
-  ]
-);
+        AND check_in < ?
+        AND check_out > ?
+      `,
+      [
+        hotelId,
+        checkOut,
+        checkIn,
+      ]
+    );
 
     const bookedRooms =
       Number(bookingRows[0].booked_rooms) || 0;
 
-    const requestedRooms = Number(rooms);
+    const requestedRooms =
+      Number(rooms);
 
     const availableRooms =
-      hotel.total_rooms - bookedRooms;
-
+      Number(hotel.total_rooms) - bookedRooms;
 
     if (requestedRooms > availableRooms) {
       throw new Error("ROOMS_NOT_AVAILABLE");
     }
 
-
-    
+    // =====================================================
+    // CALCULATE NIGHTS
+    // =====================================================
 
     const [dateRows] = await connection.execute(
       `
@@ -89,81 +133,107 @@ const createBooking = async ({
       ]
     );
 
-    const nights = Number(dateRows[0].nights);
-
+    const nights =
+      Number(dateRows[0].nights);
 
     if (nights <= 0) {
       throw new Error("INVALID_DATES");
     }
 
-
- 
+    // =====================================================
+    // ROOM PRICE
+    // =====================================================
 
     const pricePerNight =
-      Number(hotel.price_per_night);
+      Number(room.price_per_night) || 0;
 
     const totalPrice =
       pricePerNight *
       nights *
       requestedRooms;
 
+    // =====================================================
+    // BOOKING EXPIRY
+    // =====================================================
 
- const expiresAt = new Date(
-  Date.now() + 10 * 60 * 1000
-);
+    const expiresAt = new Date(
+      Date.now() + 10 * 60 * 1000
+    );
 
-const [result] = await connection.execute(
-  `
-  INSERT INTO bookings
-  (
-    user_id,
-    hotel_id,
-    check_in,
-    check_out,
-    adults,
-    children,
-    rooms_booked,
-    total_price,
-    booking_status,
-    payment_status,
-    expires_at
-  )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?)
-  `,
-  [
-    userId,
-    hotelId,
-    checkIn,
-    checkOut,
-    adults,
-    children,
-    requestedRooms,
-    totalPrice,
-    expiresAt,
-  ]
-);
+    // =====================================================
+    // INSERT BOOKING
+    // =====================================================
 
+    const [result] = await connection.execute(
+      `
+      INSERT INTO bookings
+      (
+        user_id,
+        hotel_id,
+        room_id,
+        check_in,
+        check_out,
+        adults,
+        children,
+        rooms_booked,
+        total_price,
+        booking_status,
+        payment_status,
+        expires_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?)
+      `,
+      [
+        userId,
+        hotelId,
+        roomId,
+        checkIn,
+        checkOut,
+        adults,
+        children,
+        requestedRooms,
+        totalPrice,
+        expiresAt,
+      ]
+    );
 
     await connection.commit();
 
+    // =====================================================
+    // RETURN BOOKING
+    // =====================================================
 
     return {
-  id: result.insertId,
-  userId,
-  hotelId,
-  hotelName: hotel.name,
-  checkIn,
-  checkOut,
-  adults,
-  children,
-  rooms: requestedRooms,
-  nights,
-  pricePerNight,
-  totalPrice,
-  bookingStatus: "pending",
-  paymentStatus: "pending",
-  expiresAt,
-};
+      id: result.insertId,
+      userId,
+      hotelId,
+      roomId,
+
+      hotelName: hotel.name,
+
+      roomNumber: room.room_number,
+      roomType: room.room_type,
+      capacity: room.capacity,
+      bedType: room.bed_type,
+      roomSize: room.room_size,
+
+      checkIn,
+      checkOut,
+
+      adults,
+      children,
+
+      rooms: requestedRooms,
+      nights,
+
+      pricePerNight,
+      totalPrice,
+
+      bookingStatus: "pending",
+      paymentStatus: "pending",
+
+      expiresAt,
+    };
 
   } catch (error) {
 
@@ -189,13 +259,13 @@ const [result] = await connection.execute(
 
 const getBookingById = async (id) => {
   try {
-
     const [rows] = await db.execute(
       `
       SELECT
         b.id,
         b.user_id,
         b.hotel_id,
+        b.room_id,
 
         b.check_in,
         b.check_out,
@@ -213,7 +283,14 @@ const getBookingById = async (id) => {
 
         h.name AS hotel_name,
         h.location AS hotel_location,
-        h.price_per_night,
+
+        r.room_number,
+        r.room_type,
+        r.price_per_night AS room_price,
+        r.capacity,
+        r.bed_type,
+        r.room_size,
+        r.description,
 
         (
           SELECT hi.image_url
@@ -221,28 +298,34 @@ const getBookingById = async (id) => {
           WHERE hi.hotel_id = h.id
           ORDER BY hi.id ASC
           LIMIT 1
-        ) AS hotel_image
+        ) AS hotel_image,
+
+        (
+          SELECT ri.image_url
+          FROM room_images ri
+          WHERE ri.room_id = r.id
+          ORDER BY ri.id ASC
+          LIMIT 1
+        ) AS room_image
 
       FROM bookings b
 
       INNER JOIN hotels h
         ON b.hotel_id = h.id
 
+      INNER JOIN rooms r
+        ON b.room_id = r.id
+
       WHERE b.id = ?
 
       LIMIT 1
       `,
-      [id]
+      [id],
     );
 
     return rows[0] || null;
-
   } catch (error) {
-
-    console.log(
-      "Get booking by ID model error:",
-      error
-    );
+    console.log("Get booking by ID model error:", error);
 
     throw error;
   }
@@ -272,7 +355,14 @@ const getUserBookings = async (userId) => {
         h.id AS hotel_id,
         h.name AS hotel_name,
         h.location AS hotel_location,
-        h.price_per_night,
+
+        r.id AS room_id,
+        r.room_number,
+        r.room_type,
+        r.price_per_night AS room_price,
+        r.capacity,
+        r.bed_type,
+        r.room_size,
 
         (
           SELECT hi.image_url
@@ -280,12 +370,23 @@ const getUserBookings = async (userId) => {
           WHERE hi.hotel_id = h.id
           ORDER BY hi.id ASC
           LIMIT 1
-        ) AS hotel_image
+        ) AS hotel_image,
+
+        (
+          SELECT ri.image_url
+          FROM room_images ri
+          WHERE ri.room_id = r.id
+          ORDER BY ri.id ASC
+          LIMIT 1
+        ) AS room_image
 
       FROM bookings b
 
       INNER JOIN hotels h
         ON b.hotel_id = h.id
+
+      INNER JOIN rooms r
+        ON b.room_id = r.id
 
       WHERE b.user_id = ?
 
@@ -308,7 +409,6 @@ const getUserBookings = async (userId) => {
 
 const getAllBookings = async () => {
   try {
-
     const [rows] = await db.execute(
       `
       SELECT
@@ -345,28 +445,19 @@ const getAllBookings = async () => {
         ON b.hotel_id = h.id
 
       ORDER BY b.created_at DESC
-      `
+      `,
     );
 
     return rows;
-
   } catch (error) {
-
-    console.log(
-      "Get all bookings model error:",
-      error
-    );
+    console.log("Get all bookings model error:", error);
 
     throw error;
   }
 };
 
-const cancelBooking = async (
-  bookingId,
-  userId
-) => {
+const cancelBooking = async (bookingId, userId) => {
   try {
-
     const [result] = await db.execute(
       `
       UPDATE bookings
@@ -375,82 +466,50 @@ const cancelBooking = async (
         AND user_id = ?
         AND booking_status IN ('pending', 'confirmed')
       `,
-      [
-        bookingId,
-        userId,
-      ]
+      [bookingId, userId],
     );
 
     return result.affectedRows > 0;
-
   } catch (error) {
-
-    console.log(
-      "Cancel booking model error:",
-      error
-    );
+    console.log("Cancel booking model error:", error);
 
     throw error;
   }
 };
 
-const updateBookingStatus = async (
-  bookingId,
-  status
-) => {
+const updateBookingStatus = async (bookingId, status) => {
   try {
-
     const [result] = await db.execute(
       `
       UPDATE bookings
       SET booking_status = ?
       WHERE id = ?
       `,
-      [
-        status,
-        bookingId,
-      ]
+      [status, bookingId],
     );
 
     return result.affectedRows > 0;
-
   } catch (error) {
-
-    console.log(
-      "Update booking status model error:",
-      error
-    );
+    console.log("Update booking status model error:", error);
 
     throw error;
   }
 };
 
-const updatePaymentStatus = async (
-  bookingId,
-  status
-) => {
+const updatePaymentStatus = async (bookingId, status) => {
   try {
-
     const [result] = await db.execute(
       `
       UPDATE bookings
       SET payment_status = ?
       WHERE id = ?
       `,
-      [
-        status,
-        bookingId,
-      ]
+      [status, bookingId],
     );
 
     return result.affectedRows > 0;
-
   } catch (error) {
-
-    console.log(
-      "Update payment status model error:",
-      error
-    );
+    console.log("Update payment status model error:", error);
 
     throw error;
   }
@@ -474,7 +533,7 @@ const checkRoomAvailability = async ({
       WHERE id = ?
       LIMIT 1
       `,
-      [hotelId]
+      [hotelId],
     );
 
     if (hotelRows.length === 0) {
@@ -502,12 +561,7 @@ const checkRoomAvailability = async ({
         AND check_out > ?
     `;
 
-    const params = [
-      hotelId,
-      checkOut,
-      checkIn,
-    ];
-
+    const params = [hotelId, checkOut, checkIn];
 
     // Current booking स्वतः count करू नये
     if (excludeBookingId) {
@@ -518,28 +572,15 @@ const checkRoomAvailability = async ({
       params.push(excludeBookingId);
     }
 
+    const [bookingRows] = await db.execute(query, params);
 
-    const [bookingRows] =
-      await db.execute(
-        query,
-        params
-      );
+    const bookedRooms = Number(bookingRows[0].booked_rooms) || 0;
 
+    const totalRooms = Number(hotel.total_rooms);
 
-    const bookedRooms =
-      Number(
-        bookingRows[0].booked_rooms
-      ) || 0;
+    const requestedRooms = Number(rooms);
 
-    const totalRooms =
-      Number(hotel.total_rooms);
-
-    const requestedRooms =
-      Number(rooms);
-
-    const availableRooms =
-      totalRooms - bookedRooms;
-
+    const availableRooms = totalRooms - bookedRooms;
 
     return {
       hotelExists: true,
@@ -549,16 +590,10 @@ const checkRoomAvailability = async ({
       bookedRooms,
       availableRooms,
       requestedRooms,
-      isAvailable:
-        requestedRooms <= availableRooms,
+      isAvailable: requestedRooms <= availableRooms,
     };
-
   } catch (error) {
-
-    console.log(
-      "Check room availability error:",
-      error
-    );
+    console.log("Check room availability error:", error);
 
     throw error;
   }
@@ -574,16 +609,12 @@ const expirePendingBookings = async () => {
         AND payment_status = 'pending'
         AND expires_at IS NOT NULL
         AND expires_at <= NOW()
-      `
+      `,
     );
 
     return result.affectedRows;
-
   } catch (error) {
-    console.log(
-      "Expire pending bookings model error:",
-      error
-    );
+    console.log("Expire pending bookings model error:", error);
 
     throw error;
   }
@@ -598,5 +629,5 @@ export {
   updateBookingStatus,
   updatePaymentStatus,
   checkRoomAvailability,
-  expirePendingBookings
+  expirePendingBookings,
 };
